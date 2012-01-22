@@ -1,0 +1,3 @@
+﻿depends: nunit
+depends: openrasta-container-testsuite
+
