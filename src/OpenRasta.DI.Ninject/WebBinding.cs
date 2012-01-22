@@ -25,7 +25,6 @@ namespace OpenRasta.DI.Ninject
         /// <param name="service">The service.</param>
         public WebBinding(Type service) : base(service)
         {
-            this.T
         }
 
         /// <summary>
