@@ -1,5 +1,4 @@
 #region License
-
 /* Authors:
  *      Aaron Lerch (aaronlerch@gmail.com)
  * Copyright:
@@ -22,45 +21,55 @@ using Ninject.Selection;
 using Ninject.Selection.Heuristics;
 using OpenRasta.DI.Internal;
 using OpenRasta.Pipeline;
-using IPipeline=Ninject.Activation.IPipeline;
 using NinjectBinding = Ninject.Planning.Bindings.Binding;
 
 namespace OpenRasta.DI.Ninject
 {
     /// <summary>
-    /// A Ninject-based <see cref="IDependencyResolver"/>.
+    ///   A Ninject-based <see cref = "IDependencyResolver" />.
     /// </summary>
-    public class NinjectDependencyResolver : DependencyResolverCore, IDependencyResolver
+    public class NinjectDependencyResolver : DependencyResolverCore, IDependencyResolver, IDisposable
     {
-        private static readonly IEnumerable<IParameter> EmptyParameters = new IParameter[] { };
+        static readonly IEnumerable<IParameter> EmptyParameters = new IParameter[] { };
 
-        private readonly IKernel _kernel;
+        readonly IKernel _kernel;
+        bool _disposeKernelOnExit;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="NinjectDependencyResolver"/> class.
+        ///   Initializes a new instance of the <see cref = "NinjectDependencyResolver" /> class.
         /// </summary>
         public NinjectDependencyResolver() : this(null)
-        { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NinjectDependencyResolver"/> class.
-        /// </summary>
-        /// <param name="kernel">The kernel to use.</param>
-        public NinjectDependencyResolver(IKernel kernel)
         {
-            _kernel = kernel ?? CreateKernel();
         }
 
         /// <summary>
-        /// Creates an <see cref="IKernel"/> that is configured in the way OpenRasta expects.
+        ///   Initializes a new instance of the <see cref = "NinjectDependencyResolver" /> class.
+        /// </summary>
+        /// <param name = "kernel">The kernel to use.</param>
+        public NinjectDependencyResolver(IKernel kernel) : this(kernel, kernel is SubContainerKernel)
+        {
+        }
+
+        /// <summary>
+        ///   Initializes a new instance of the <see cref = "NinjectDependencyResolver" /> class.
+        /// </summary>
+        /// <param name = "kernel">The kernel to use.</param>
+        public NinjectDependencyResolver(IKernel kernel, bool disposeKernelContainerOnExit)
+        {
+            _kernel = kernel ?? CreateKernel();
+            _disposeKernelOnExit = disposeKernelContainerOnExit;
+        }
+
+        /// <summary>
+        ///   Creates an <see cref = "IKernel" /> that is configured in the way OpenRasta expects.
         /// </summary>
         /// <remarks>
-        /// OpenRasta is written with some implicit assumptions or requirements about how the
-        /// IoC container will work. For example, which constructor is selected for injection
-        /// or the fact that public "settable" properties will be injected if possible
-        /// and left alone if not possible.
+        ///   OpenRasta is written with some implicit assumptions or requirements about how the
+        ///   IoC container will work. For example, which constructor is selected for injection
+        ///   or the fact that public "settable" properties will be injected if possible
+        ///   and left alone if not possible.
         /// </remarks>
-        /// <returns>A new <see cref="IKernel"/></returns>
+        /// <returns>A new <see cref = "IKernel" /></returns>
         public static IKernel CreateKernel()
         {
             var kernel = new StandardKernel();
@@ -69,19 +78,19 @@ namespace OpenRasta.DI.Ninject
         }
 
         /// <summary>
-        /// Creates an <see cref="IKernel"/> that is configured in the way OpenRasta expects,
-        /// using the specified "parent kernel".
+        ///   Creates an <see cref = "IKernel" /> that is configured in the way OpenRasta expects,
+        ///   using the specified "parent kernel".
         /// </summary>
         /// <remarks>
-        /// OpenRasta is written with some implicit assumptions or requirements about how the
-        /// IoC container will work. For example, which constructor is selected for injection
-        /// or the fact that public "settable" properties will be injected if possible
-        /// and left alone if not possible.
+        ///   OpenRasta is written with some implicit assumptions or requirements about how the
+        ///   IoC container will work. For example, which constructor is selected for injection
+        ///   or the fact that public "settable" properties will be injected if possible
+        ///   and left alone if not possible.
         /// 
-        /// If a request to the kernel is not resolvable, the kernel will attempt to resolve the type
-        /// from the <see param="parentKernel" />.
+        ///   If a request to the kernel is not resolvable, the kernel will attempt to resolve the type
+        ///   from the <see param = "parentKernel" />.
         /// </remarks>
-        /// <returns>A new <see cref="IKernel"/></returns>
+        /// <returns>A new <see cref = "IKernel" /></returns>
         public static IKernel CreateKernel(IKernel parentKernel)
         {
             var kernel = new SubContainerKernel(parentKernel);
@@ -89,43 +98,99 @@ namespace OpenRasta.DI.Ninject
             return kernel;
         }
 
-        private static void ConfigureKernel(IKernel kernel)
+        /// <summary>
+        ///   Destructs the specified key.
+        /// </summary>
+        /// <param name = "key">The key.</param>
+        /// <param name = "instance">The instance.</param>
+        public void Destruct(string key, object instance)
         {
-            // Needed to support OpenRasta's assumptions.
-            kernel.Components.Add<IInjectionHeuristic, AllResolvablePropertiesInjectionHeuristic>();
-            kernel.Components.RemoveAll(typeof(IConstructorScorer));
-            kernel.Components.Add<IConstructorScorer, InjectableConstructorScorer>();
-        }
-
-        private static IBinding CreateBinding(Type serviceType, DependencyLifetime lifetime)
-        {
-            return (lifetime == DependencyLifetime.PerRequest)
-                       ? new WebBinding(serviceType)
-                       : new NinjectBinding(serviceType);
+            var store = GetStore();
+            store[key] = null;
         }
 
         /// <summary>
-        /// Adds the dependency.
+        ///   Called when an incoming request has been processed.
         /// </summary>
-        /// <param name="concreteType">Type of the concrete class to create.</param>
-        /// <param name="lifetime">The lifetime of the registration.</param>
+        public void HandleIncomingRequestProcessed()
+        {
+            var store = GetStore();
+            store.Destruct();
+        }
+
+        /// <summary>
+        ///   Determines whether the specified service type has dependency.
+        /// </summary>
+        /// <param name = "serviceType">Type of the service.</param>
+        /// <returns>
+        ///   <see langword = "true" /> if the specified service type has dependency; otherwise, <see langword = "false" />.
+        /// </returns>
+        public bool HasDependency(Type serviceType)
+        {
+            if (serviceType == null) return false;
+
+            var bindings = GetBindings(serviceType);
+            return bindings.Any();
+        }
+
+        /// <summary>
+        ///   Determines whether a binding exists between the specified service and concrete types.
+        /// </summary>
+        public bool HasDependencyImplementation(Type serviceType, Type concreteType)
+        {
+            if (serviceType == null || concreteType == null) return false;
+
+            if (serviceType == concreteType)
+            {
+                return HasDependency(serviceType);
+            }
+
+            var bindings = GetBindings(serviceType);
+            var request = _kernel.CreateRequest(serviceType, null, EmptyParameters, false, false);
+            return bindings.Any(b =>
+            {
+                if (b.Target != BindingTarget.Type) return false;
+                var context = new Context(_kernel,
+                                          request,
+                                          b,
+                                          _kernel.Components.Get<ICache>(),
+                                          _kernel.Components.Get<IPlanner>(),
+                                          _kernel.Components.Get<global::Ninject.Activation.IPipeline>());
+                return b.GetProvider(context).Type == concreteType;
+            });
+        }
+
+        public void Dispose()
+        {
+            if (_disposeKernelOnExit) _kernel.Dispose();
+        }
+
+        /// <summary>
+        ///   Adds the dependency.
+        /// </summary>
+        /// <param name = "concreteType">Type of the concrete class to create.</param>
+        /// <param name = "lifetime">The lifetime of the registration.</param>
         protected override void AddDependencyCore(Type concreteType, DependencyLifetime lifetime)
         {
             AddDependencyCore(concreteType, concreteType, lifetime);
         }
 
         /// <summary>
-        /// Adds the dependency.
+        ///   Adds the dependency.
         /// </summary>
-        /// <param name="serviceType">Type of the service to bind to.</param>
-        /// <param name="concreteType">Type of the concrete class to create.</param>
-        /// <param name="lifetime">The lifetime of the registration.</param>
+        /// <param name = "serviceType">Type of the service to bind to.</param>
+        /// <param name = "concreteType">Type of the concrete class to create.</param>
+        /// <param name = "lifetime">The lifetime of the registration.</param>
         protected override void AddDependencyCore(Type serviceType, Type concreteType, DependencyLifetime lifetime)
         {
             var binding = CreateBinding(serviceType, lifetime);
             if (lifetime == DependencyLifetime.PerRequest)
             {
-                binding.ProviderCallback = ctx => new PerRequestProvider(concreteType, ctx.Kernel.Components.Get<IPlanner>(), ctx.Kernel.Components.Get<ISelector>());
+                binding.ProviderCallback =
+                    ctx =>
+                    new PerRequestProvider(concreteType,
+                                           ctx.Kernel.Components.Get<IPlanner>(),
+                                           ctx.Kernel.Components.Get<ISelector>());
                 binding.Target = BindingTarget.Provider;
             }
             else
@@ -140,11 +205,11 @@ namespace OpenRasta.DI.Ninject
         }
 
         /// <summary>
-        /// Adds the an instance to the dependencies.
+        ///   Adds the an instance to the dependencies.
         /// </summary>
-        /// <param name="serviceType">Type of the service to add.</param>
-        /// <param name="instance">The instance of the service to add.</param>
-        /// <param name="lifetime">The lifetime for the registration.</param>
+        /// <param name = "serviceType">Type of the service to add.</param>
+        /// <param name = "instance">The instance of the service to add.</param>
+        /// <param name = "lifetime">The lifetime for the registration.</param>
         protected override void AddDependencyInstanceCore(Type serviceType, object instance, DependencyLifetime lifetime)
         {
             if (lifetime == DependencyLifetime.Transient) return;
@@ -163,9 +228,11 @@ namespace OpenRasta.DI.Ninject
                 if (foundExistingBinding && binding.Target != BindingTarget.Method)
                 {
                     // A binding exists, but wasn't specified as an instance callback. Error!
-                    throw new DependencyResolutionException(string.Format("Cannot register an instance for type '{0}' because there is already a binding target of type '{1}'.",
-                        serviceType.Name, 
-                        binding.Target));
+                    throw new DependencyResolutionException(
+                        string.Format(
+                            "Cannot register an instance for type '{0}' because there is already a binding target of type '{1}'.",
+                            serviceType.Name,
+                            binding.Target));
                 }
 
                 var store = GetStore();
@@ -174,14 +241,16 @@ namespace OpenRasta.DI.Ninject
 
                 if (!foundExistingBinding)
                 {
-                    store.GetContextInstances().Add(new ContextStoreDependency(key, instance, new ContextStoreDependencyCleaner(_kernel)));
+                    store.GetContextInstances().Add(new ContextStoreDependency(key,
+                                                                               instance,
+                                                                               new ContextStoreDependencyCleaner(_kernel)));
                 }
 
                 builder.ToMethod(c =>
-                                     {
-                                         var ctxStore = GetStore();
-                                         return ctxStore[serviceType.GetKey()];
-                                     });
+                {
+                    var ctxStore = GetStore();
+                    return ctxStore[serviceType.GetKey()];
+                });
             }
             else if (lifetime == DependencyLifetime.Singleton)
             {
@@ -190,20 +259,20 @@ namespace OpenRasta.DI.Ninject
         }
 
         /// <summary>
-        /// Resolves all the specified types.
+        ///   Resolves all the specified types.
         /// </summary>
-        /// <typeparam name="TService">The type of the service.</typeparam>
+        /// <typeparam name = "TService">The type of the service.</typeparam>
         /// <returns></returns>
         protected override IEnumerable<TService> ResolveAllCore<TService>()
         {
-            Type serviceType = typeof (TService);
+            Type serviceType = typeof(TService);
             return _kernel.GetAll<TService>();
         }
 
         /// <summary>
-        /// Resolves an instance of the <see cref="IKernel"/>.
+        ///   Resolves an instance of the <see cref = "IKernel" />.
         /// </summary>
-        /// <param name="serviceType">Type of the service.</param>
+        /// <param name = "serviceType">Type of the service.</param>
         /// <returns></returns>
         protected override object ResolveCore(Type serviceType)
         {
@@ -211,61 +280,39 @@ namespace OpenRasta.DI.Ninject
             return _kernel.Get(serviceType);
         }
 
-        private void RequireDependancy(Type serviceType)
+        static void ConfigureKernel(IKernel kernel)
         {
-            if (!HasDependency(serviceType))
-            {
-                throw new DependencyResolutionException("Unable to resolve dependency for {0}".With(serviceType));
-            }
+            // Needed to support OpenRasta's assumptions.
+            kernel.Components.Add<IInjectionHeuristic, AllResolvablePropertiesInjectionHeuristic>();
+            kernel.Components.RemoveAll(typeof(IConstructorScorer));
+            kernel.Components.Add<IConstructorScorer, InjectableConstructorScorer>();
         }
 
-        /// <summary>
-        /// Determines whether the specified service type has dependency.
-        /// </summary>
-        /// <param name="serviceType">Type of the service.</param>
-        /// <returns>
-        /// 	<see langword="true"/> if the specified service type has dependency; otherwise, <see langword="false"/>.
-        /// </returns>
-        public bool HasDependency(Type serviceType)
+        static IBinding CreateBinding(Type serviceType, DependencyLifetime lifetime)
         {
-            if (serviceType == null) return false;
-
-            var bindings = GetBindings(serviceType);
-            return bindings.Any();
+            return (lifetime == DependencyLifetime.PerRequest)
+                       ? new WebBinding(serviceType)
+                       : new NinjectBinding(serviceType);
         }
 
-        /// <summary>
-        /// Determines whether a binding exists between the specified service and concrete types.
-        /// </summary>
-        public bool HasDependencyImplementation(Type serviceType, Type concreteType)
+        static bool IsWebInstance(IBinding binding)
         {
-            if (serviceType == null || concreteType == null) return false;
-
-            if (serviceType == concreteType)
-            {
-                return HasDependency(serviceType);
-            }
-
-            var bindings = GetBindings(serviceType);
-            var request = _kernel.CreateRequest(serviceType, null, EmptyParameters, false, false);
-            return bindings.Any(b =>
-                                    {
-                                        if (b.Target != BindingTarget.Type) return false;
-                                        var context = new Context(_kernel, request, b, _kernel.Components.Get<ICache>(),
-                                                                  _kernel.Components.Get<IPlanner>(),
-                                                                  _kernel.Components.Get<IPipeline>());
-                                        return b.GetProvider(context).Type == concreteType;
-                                    });
+            return (binding is WebBinding) && (binding.Target == BindingTarget.Method);
         }
 
-        private IEnumerable<IBinding> GetBindings(Type service)
+        IEnumerable<IBinding> GetBindings(Type service)
         {
             return from binding in _kernel.GetBindings(service)
                    where IsAvailable(binding)
                    select binding;
         }
 
-        private bool IsAvailable(IBinding binding)
+        IContextStore GetStore()
+        {
+            return _kernel.Get<IContextStore>();
+        }
+
+        bool IsAvailable(IBinding binding)
         {
             if (IsWebInstance(binding))
             {
@@ -278,34 +325,12 @@ namespace OpenRasta.DI.Ninject
             return binding.Target != BindingTarget.Method;
         }
 
-        private static bool IsWebInstance(IBinding binding)
+        void RequireDependancy(Type serviceType)
         {
-            return (binding is WebBinding) && (binding.Target == BindingTarget.Method);
-        }
-
-        /// <summary>
-        /// Called when an incoming request has been processed.
-        /// </summary>
-        public void HandleIncomingRequestProcessed()
-        {
-            var store = GetStore();
-            store.Destruct();
-        }
-
-        /// <summary>
-        /// Destructs the specified key.
-        /// </summary>
-        /// <param name="key">The key.</param>
-        /// <param name="instance">The instance.</param>
-        public void Destruct(string key, object instance)
-        {
-            var store = GetStore();
-            store[key] = null;
-        }
-
-        private IContextStore GetStore()
-        {
-            return _kernel.Get<IContextStore>();
+            if (!HasDependency(serviceType))
+            {
+                throw new DependencyResolutionException("Unable to resolve dependency for {0}".With(serviceType));
+            }
         }
     }
 }
