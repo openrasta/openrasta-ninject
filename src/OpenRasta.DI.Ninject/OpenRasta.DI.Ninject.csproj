@@ -21,22 +21,18 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\..\bin\vs\bin\Debug\OpenRasta.DI.Ninject\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>..\..\..\bin\vs\bin\Debug\OpenRasta.DI.Ninject\OpenRasta.DI.Ninject.xml</DocumentationFile>
     <NoWarn>1591;1591</NoWarn>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\..\bin\vs\bin\Release\OpenRasta.DI.Ninject\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>..\..\..\bin\vs\bin\Release\OpenRasta.DI.Ninject\OpenRasta.DI.Ninject.xml</DocumentationFile>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
@@ -54,9 +50,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\CommonProperties.cs">
-      <Link>Properties\CommonProperties.cs</Link>
-    </Compile>
     <Compile Include="AllResolvablePropertiesInjectionHeuristic.cs" />
     <Compile Include="ContextStoreDependencyCleaner.cs" />
     <Compile Include="InjectableConstructorScorer.cs" />
@@ -67,6 +60,7 @@
     <Compile Include="SubContainerKernel.cs" />
     <Compile Include="WebBinding.cs" />
   </ItemGroup>
+  <Import Project="..\..\build\common.project.properties" />
   <Import Project="..\..\wraps\openwrap\build\OpenWrap.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
