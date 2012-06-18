@@ -4,4 +4,4 @@ depends: ninject ~> 2.2
 depends: openrasta-core ~> 2.0
 title: OpenRasta Ninject Support
 directory-structure: src\*{scope:Tests=tests}*
-build: msbuild;project=src/openRasta.DI.Ninject/OpenRasta.DI.Ninject.csproj
+build: msbuild;
